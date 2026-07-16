@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="GarantiApp">
 <title>GarantiApp</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -320,6 +322,14 @@
 
   /* Scrollable content area */
   .scroll-content { flex: 1; }
+
+  /* Backup export/import */
+  .backup-row { display: flex; gap: 18px; margin-top: 10px; }
+  .backup-link {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--green-400);
+    font-family: 'DM Sans', sans-serif;
+  }
 </style>
 </head>
 <body>
@@ -359,6 +369,11 @@
     <div class="header">
       <h1>Todos os produtos</h1>
       <p id="list-count"></p>
+      <div class="backup-row">
+        <button class="backup-link" onclick="exportBackup()">Exportar backup</button>
+        <button class="backup-link" onclick="document.getElementById('import-file').click()">Importar backup</button>
+        <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importBackup(event)">
+      </div>
     </div>
     <div id="list-container" class="scroll-content"></div>
   </div>
@@ -489,7 +504,19 @@ function switchTab(tab) {
 // Dates & countdown
 function nowTs() { return Math.floor(Date.now() / 1000); }
 function tsToDate(ts) { return new Date(ts * 1000); }
-function dateToTs(dateStr) { return Math.floor(new Date(dateStr).getTime() / 1000); }
+// Interpreta "YYYY-MM-DD" como data local (evita o input de 1 dia por causa do parse em UTC)
+function dateToTs(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return Math.floor(new Date(y, m - 1, d).getTime() / 1000);
+}
+// Formata um timestamp como "YYYY-MM-DD" em horário local, para preencher <input type="date">
+function tsToDateInputValue(ts) {
+  const d = tsToDate(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function calcExpiry(purchaseTs, months) {
   const d = new Date(purchaseTs * 1000);
@@ -521,6 +548,10 @@ function formatCountdown(days) {
 
 function formatDate(ts) {
   return tsToDate(ts).toLocaleDateString('pt-BR');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function progressPct(purchaseTs, expiryTs) {
@@ -613,10 +644,10 @@ function buildCard(p) {
 
   card.innerHTML = `
     <div class="card-top">
-      <div class="product-icon" style="${iconBg}">${p.emoji}</div>
+      <div class="product-icon" style="${iconBg}">${escapeHtml(p.emoji)}</div>
       <div class="card-info">
-        <h3>${p.name}</h3>
-        <div class="brand">${p.brand || 'Sem marca'} ${p.store ? '· ' + p.store : ''}</div>
+        <h3>${escapeHtml(p.name)}</h3>
+        <div class="brand">${escapeHtml(p.brand || 'Sem marca')} ${p.store ? '· ' + escapeHtml(p.store) : ''}</div>
       </div>
       <span class="status-pill status-${s.cls}">${s.label}</span>
     </div>
@@ -687,11 +718,11 @@ function openDetail(p) {
       <div class="key">Garantia total</div>
     </div>
     <div class="detail-stat">
-      <div class="val">${p.store || '—'}</div>
+      <div class="val">${escapeHtml(p.store || '—')}</div>
       <div class="key">Loja</div>
     </div>
     <div class="detail-stat">
-      <div class="val" style="font-size:12px;word-break:break-all">${p.nf || '—'}</div>
+      <div class="val" style="font-size:12px;word-break:break-all">${escapeHtml(p.nf || '—')}</div>
       <div class="key">Nota fiscal</div>
     </div>
   `;
@@ -719,7 +750,7 @@ function openAddSheet() {
   document.getElementById('input-store').value = '';
   document.getElementById('input-nf').value = '';
   document.getElementById('input-months').value = '12';
-  document.getElementById('input-purchase').value = new Date().toISOString().split('T')[0];
+  document.getElementById('input-purchase').value = tsToDateInputValue(nowTs());
   document.getElementById('btn-delete').style.display = 'none';
   selectEmoji('📱');
   document.getElementById('sheet-add').classList.add('open');
@@ -734,7 +765,7 @@ function openEditSheet(p) {
   document.getElementById('input-store').value = p.store || '';
   document.getElementById('input-nf').value = p.nf || '';
   document.getElementById('input-months').value = p.months;
-  document.getElementById('input-purchase').value = new Date(p.purchaseTs * 1000).toISOString().split('T')[0];
+  document.getElementById('input-purchase').value = tsToDateInputValue(p.purchaseTs);
   document.getElementById('btn-delete').style.display = 'block';
   selectEmoji(p.emoji);
   document.getElementById('sheet-add').classList.add('open');
@@ -765,12 +796,61 @@ function saveProduct() {
     const idx = products.findIndex(p => p.id === editingId);
     if (idx !== -1) products[idx] = { ...products[idx], emoji: selectedEmoji, name, brand, store, nf, months, purchaseTs, expiryTs };
   } else {
-    products.push({ id: Date.now().toString(), emoji: selectedEmoji, name, brand, store, nf, months, purchaseTs, expiryTs });
+    products.push({ id: generateId(), emoji: selectedEmoji, name, brand, store, nf, months, purchaseTs, expiryTs });
   }
 
   localStorage.setItem('garantia_products', JSON.stringify(products));
   closeAddSheet();
   renderDash();
+}
+
+function generateId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+// Backup export/import
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(products, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `garantiapp-backup-${tsToDateInputValue(nowTs())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    let imported;
+    try {
+      imported = JSON.parse(reader.result);
+    } catch {
+      alert('Arquivo inválido: não é um JSON válido.');
+      return;
+    }
+    const valid = Array.isArray(imported) && imported.every(p =>
+      p && typeof p.name === 'string' && typeof p.purchaseTs === 'number' && typeof p.expiryTs === 'number'
+    );
+    if (!valid) {
+      alert('Arquivo inválido: formato de backup inesperado.');
+      return;
+    }
+    if (!confirm(`Importar ${imported.length} produto(s)? Isso substitui todos os dados atuais.`)) return;
+
+    products = imported.map(p => ({ ...p, id: p.id || generateId() }));
+    localStorage.setItem('garantia_products', JSON.stringify(products));
+    renderDash();
+    renderList();
+  };
+  reader.readAsText(file);
 }
 
 function deleteProduct() {
@@ -784,7 +864,7 @@ function deleteProduct() {
 
 // Register service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 // Initial render
