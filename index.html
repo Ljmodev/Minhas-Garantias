@@ -513,7 +513,7 @@ const EMOJIS = ['📱','💻','📺','🖥️','⌨️','🖱️','📷','🎮',
 const SUPABASE_URL = 'https://tzaxrjouougseinrxvmu.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_iu7s9bcxyZEPVyil775oNA_VByZm5XX';
 const PHOTO_BUCKET = 'warranty-photos';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let userId = null;
@@ -599,14 +599,14 @@ function removePhoto() {
 // Storage: upload/remocao de fotos no bucket privado (uma pasta por usuario)
 async function uploadPhoto(blob, id) {
   const path = `${userId}/${id}.jpg`;
-  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+  const { error } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
   if (error) { alert('Não foi possível enviar a foto: ' + error.message); return null; }
   return path;
 }
 
 async function deletePhotoFile(path) {
   if (!path) return;
-  await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+  await sb.storage.from(PHOTO_BUCKET).remove([path]);
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -963,7 +963,7 @@ async function saveProduct() {
       expiry_date: tsToDateInputValue(expiryTs)
     };
 
-    const { error } = await supabase.from('warranties').upsert(row);
+    const { error } = await sb.from('warranties').upsert(row);
     if (error) { alert('Não foi possível salvar: ' + error.message); return; }
 
     closeAddSheet();
@@ -1000,7 +1000,7 @@ function rowToProduct(row) {
 async function attachSignedPhotoUrls(list) {
   const paths = list.filter(p => p.photoPath).map(p => p.photoPath);
   if (paths.length === 0) return list;
-  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 60 * 60 * 24);
+  const { data, error } = await sb.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 60 * 60 * 24);
   if (error || !data) return list;
   const map = {};
   data.forEach(d => { if (d.signedUrl) map[d.path] = d.signedUrl; });
@@ -1008,7 +1008,7 @@ async function attachSignedPhotoUrls(list) {
 }
 
 async function loadProducts() {
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('warranties')
     .select('*')
     .order('expiry_date', { ascending: true });
@@ -1067,7 +1067,7 @@ function importBackup(event) {
     if (!confirm(`Importar ${imported.length} produto(s)? Isso substitui todos os dados atuais na nuvem.`)) return;
 
     for (const p of products) await deletePhotoFile(p.photoPath);
-    await supabase.from('warranties').delete().eq('device_id', userId);
+    await sb.from('warranties').delete().eq('device_id', userId);
 
     for (const p of imported) {
       const id = p.id || generateId();
@@ -1075,7 +1075,7 @@ function importBackup(event) {
       if (p.photo) {
         try { photoPath = await uploadPhoto(await dataUrlToBlob(p.photo), id); } catch { photoPath = null; }
       }
-      await supabase.from('warranties').upsert({
+      await sb.from('warranties').upsert({
         id, device_id: userId, name: p.name, brand: p.brand || null, store: p.store || null,
         nf: p.nf || null, emoji: p.emoji || '📱', photo_url: photoPath,
         purchase_date: tsToDateInputValue(p.purchaseTs), warranty_months: p.months,
@@ -1092,7 +1092,7 @@ async function deleteProduct() {
   if (!editingId) return;
   if (!confirm('Excluir este produto?')) return;
   const p = products.find(x => x.id === editingId);
-  const { error } = await supabase.from('warranties').delete().eq('id', editingId);
+  const { error } = await sb.from('warranties').delete().eq('id', editingId);
   if (error) { alert('Não foi possível excluir: ' + error.message); return; }
   if (p) await deletePhotoFile(p.photoPath);
   closeAddSheet();
@@ -1107,10 +1107,10 @@ if ('serviceWorker' in navigator) {
 // Autenticacao anonima: cada instalacao do app vira um usuario proprio no Supabase,
 // sem tela de login. Precisa de "Allow anonymous sign-ins" habilitado no projeto.
 async function initAuth() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (session) { userId = session.user.id; return; }
 
-  const { data, error } = await supabase.auth.signInAnonymously();
+  const { data, error } = await sb.auth.signInAnonymously();
   if (error) {
     alert('Não foi possível conectar à nuvem: habilite "Allow anonymous sign-ins" em Authentication → Sign In / Providers no painel do Supabase.');
     throw error;
@@ -1133,7 +1133,7 @@ async function migrateLocalDataIfAny() {
     if (p.photo) {
       try { photoPath = await uploadPhoto(await dataUrlToBlob(p.photo), id); } catch { photoPath = null; }
     }
-    await supabase.from('warranties').upsert({
+    await sb.from('warranties').upsert({
       id, device_id: userId, name: p.name, brand: p.brand || null, store: p.store || null,
       nf: p.nf || null, emoji: p.emoji || '📱', photo_url: photoPath,
       purchase_date: tsToDateInputValue(p.purchaseTs), warranty_months: p.months,
