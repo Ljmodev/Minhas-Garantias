@@ -14,6 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   :root {
     --green-50: #E1F5EE;
@@ -144,7 +145,7 @@
   .product-icon {
     width: 44px; height: 44px; border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; flex-shrink: 0;
+    font-size: 22px; flex-shrink: 0; overflow: hidden;
   }
   .card-info { flex: 1; min-width: 0; }
   .card-info h3 { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -277,7 +278,7 @@
   .detail-icon {
     width: 72px; height: 72px; border-radius: 20px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 36px; margin: 0 auto 12px;
+    font-size: 36px; margin: 0 auto 12px; overflow: hidden;
   }
   .detail-name { font-size: 20px; font-weight: 600; }
   .detail-brand { font-size: 14px; color: var(--text-muted); margin-top: 2px; }
@@ -324,12 +325,31 @@
   .scroll-content { flex: 1; }
 
   /* Backup export/import */
-  .backup-row { display: flex; gap: 18px; margin-top: 10px; }
+  .backup-row { display: flex; gap: 8px; margin-top: 12px; }
   .backup-link {
-    background: none; border: none; padding: 0; cursor: pointer;
-    font-size: 12px; font-weight: 600; color: var(--green-400);
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg); border: 1.5px solid var(--border); border-radius: 20px;
+    padding: 7px 12px; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--text);
     font-family: 'DM Sans', sans-serif;
   }
+  .backup-link svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  /* Photo picker */
+  .photo-picker { display: flex; align-items: center; gap: 14px; }
+  .photo-preview {
+    width: 64px; height: 64px; border-radius: 14px; overflow: hidden; flex-shrink: 0;
+    background: var(--bg); border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 26px;
+  }
+  .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-actions { display: flex; flex-direction: column; gap: 6px; }
+  .photo-btn {
+    padding: 8px 14px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 13px; font-weight: 500;
+    font-family: 'DM Sans', sans-serif; cursor: pointer;
+  }
+  .photo-btn-remove { color: var(--red-400); border-color: var(--red-200); }
 </style>
 </head>
 <body>
@@ -370,8 +390,14 @@
       <h1>Todos os produtos</h1>
       <p id="list-count"></p>
       <div class="backup-row">
-        <button class="backup-link" onclick="exportBackup()">Exportar backup</button>
-        <button class="backup-link" onclick="document.getElementById('import-file').click()">Importar backup</button>
+        <button class="backup-link" onclick="exportBackup()">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar backup
+        </button>
+        <button class="backup-link" onclick="document.getElementById('import-file').click()">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Importar backup
+        </button>
         <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importBackup(event)">
       </div>
     </div>
@@ -405,6 +431,21 @@
       <button class="btn-close" onclick="closeAddSheet()">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
+    </div>
+
+    <div class="form-group">
+      <label>Foto do produto (opcional)</label>
+      <div class="photo-picker">
+        <div class="photo-preview" id="photo-preview">
+          <span id="photo-preview-empty">📷</span>
+          <img id="photo-preview-img" style="display:none" alt="">
+        </div>
+        <div class="photo-actions">
+          <button type="button" class="photo-btn" onclick="document.getElementById('input-photo').click()">Escolher foto</button>
+          <button type="button" class="photo-btn photo-btn-remove" id="btn-remove-photo" onclick="removePhoto()" style="display:none">Remover foto</button>
+        </div>
+        <input type="file" id="input-photo" accept="image/*" style="display:none" onchange="handlePhotoSelect(event)">
+      </div>
     </div>
 
     <div class="form-group">
@@ -469,10 +510,21 @@
 <script>
 const EMOJIS = ['📱','💻','📺','🖥️','⌨️','🖱️','📷','🎮','🎧','🔊','📠','🖨️','📟','🔋','💡','🏠','❄️','🧺','🍳','☕','🧹','🔧','🔩','🚗','🛵','⌚','💊','🏃','🎸','📚'];
 
-let products = JSON.parse(localStorage.getItem('garantia_products') || '[]');
+const SUPABASE_URL = 'https://tzaxrjouougseinrxvmu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_iu7s9bcxyZEPVyil775oNA_VByZm5XX';
+const PHOTO_BUCKET = 'warranty-photos';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let products = [];
+let userId = null;
 let editingId = null;
 let selectedEmoji = '📱';
 let detailProduct = null;
+
+// Estado da foto sendo editada no formulario: 'unchanged' | 'new' | 'removed'
+let currentPhotoAction = 'unchanged';
+let currentPhotoBlob = null;
+let editingPhotoPath = null;
 
 // Init
 document.getElementById('header-date').textContent = new Date().toLocaleDateString('pt-BR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
@@ -490,6 +542,84 @@ EMOJIS.forEach(e => {
 function selectEmoji(e) {
   selectedEmoji = e;
   document.querySelectorAll('.emoji-btn').forEach(b => b.classList.toggle('selected', b.textContent === e));
+}
+
+// Photo picker (comprime a imagem via canvas; o upload real acontece so ao salvar o produto)
+function handlePhotoSelect(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 900;
+      let { width, height } = img;
+      if (width > height && width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
+      else if (height > MAX) { width = Math.round(width * MAX / height); height = MAX; }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        currentPhotoBlob = blob;
+        currentPhotoAction = 'new';
+        setPhotoPreview(URL.createObjectURL(blob));
+      }, 'image/jpeg', 0.72);
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setPhotoPreview(url) {
+  const img = document.getElementById('photo-preview-img');
+  const empty = document.getElementById('photo-preview-empty');
+  const removeBtn = document.getElementById('btn-remove-photo');
+  if (url) {
+    img.src = url;
+    img.style.display = 'block';
+    empty.style.display = 'none';
+    removeBtn.style.display = 'block';
+  } else {
+    img.style.display = 'none';
+    empty.style.display = 'block';
+    removeBtn.style.display = 'none';
+  }
+}
+
+function removePhoto() {
+  currentPhotoBlob = null;
+  currentPhotoAction = 'removed';
+  setPhotoPreview(null);
+}
+
+// Storage: upload/remocao de fotos no bucket privado (uma pasta por usuario)
+async function uploadPhoto(blob, id) {
+  const path = `${userId}/${id}.jpg`;
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+  if (error) { alert('Não foi possível enviar a foto: ' + error.message); return null; }
+  return path;
+}
+
+async function deletePhotoFile(path) {
+  if (!path) return;
+  await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+}
+
+function dataUrlToBlob(dataUrl) {
+  return fetch(dataUrl).then(r => r.blob());
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 // Tab switching
@@ -641,10 +771,11 @@ function buildCard(p) {
   card.onclick = () => openDetail(p);
 
   const iconBg = s.cls === 'ok' ? 'background:var(--green-50)' : s.cls === 'warn' ? 'background:var(--amber-50)' : 'background:var(--red-50)';
+  const iconContent = p.photo ? `<img src="${p.photo}" alt="" style="width:100%;height:100%;object-fit:cover">` : escapeHtml(p.emoji);
 
   card.innerHTML = `
     <div class="card-top">
-      <div class="product-icon" style="${iconBg}">${escapeHtml(p.emoji)}</div>
+      <div class="product-icon" style="${iconBg}">${iconContent}</div>
       <div class="card-info">
         <h3>${escapeHtml(p.name)}</h3>
         <div class="brand">${escapeHtml(p.brand || 'Sem marca')} ${p.store ? '· ' + escapeHtml(p.store) : ''}</div>
@@ -694,8 +825,13 @@ function openDetail(p) {
   const s = getStatus(p.expiryTs);
   const iconBg = s.cls === 'ok' ? 'background:var(--green-50)' : s.cls === 'warn' ? 'background:var(--amber-50)' : 'background:var(--red-50)';
 
-  document.getElementById('detail-icon').style.cssText = iconBg;
-  document.getElementById('detail-icon').textContent = p.emoji;
+  const detailIcon = document.getElementById('detail-icon');
+  detailIcon.style.cssText = iconBg;
+  if (p.photo) {
+    detailIcon.innerHTML = `<img src="${p.photo}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    detailIcon.textContent = p.emoji;
+  }
   document.getElementById('detail-name').textContent = p.name;
   document.getElementById('detail-brand').textContent = p.brand || 'Sem marca informada';
 
@@ -744,6 +880,10 @@ function editFromDetail() {
 function openAddSheet() {
   editingId = null;
   selectedEmoji = '📱';
+  currentPhotoAction = 'unchanged';
+  currentPhotoBlob = null;
+  editingPhotoPath = null;
+  setPhotoPreview(null);
   document.getElementById('sheet-add-title').textContent = 'Novo produto';
   document.getElementById('input-name').value = '';
   document.getElementById('input-brand').value = '';
@@ -759,6 +899,10 @@ function openAddSheet() {
 function openEditSheet(p) {
   editingId = p.id;
   selectedEmoji = p.emoji;
+  currentPhotoAction = 'unchanged';
+  currentPhotoBlob = null;
+  editingPhotoPath = p.photoPath || null;
+  setPhotoPreview(p.photo || null);
   document.getElementById('sheet-add-title').textContent = 'Editar produto';
   document.getElementById('input-name').value = p.name;
   document.getElementById('input-brand').value = p.brand || '';
@@ -777,7 +921,7 @@ document.getElementById('sheet-add').addEventListener('click', e => {
   if (e.target === document.getElementById('sheet-add')) closeAddSheet();
 });
 
-function saveProduct() {
+async function saveProduct() {
   const name = document.getElementById('input-name').value.trim();
   const brand = document.getElementById('input-brand').value.trim();
   const store = document.getElementById('input-store').value.trim();
@@ -791,17 +935,43 @@ function saveProduct() {
 
   const purchaseTs = dateToTs(purchaseStr);
   const expiryTs = calcExpiry(purchaseTs, months);
+  const id = editingId || generateId();
 
-  if (editingId) {
-    const idx = products.findIndex(p => p.id === editingId);
-    if (idx !== -1) products[idx] = { ...products[idx], emoji: selectedEmoji, name, brand, store, nf, months, purchaseTs, expiryTs };
-  } else {
-    products.push({ id: generateId(), emoji: selectedEmoji, name, brand, store, nf, months, purchaseTs, expiryTs });
+  const saveBtn = document.querySelector('#sheet-add .btn-save');
+  const saveBtnLabel = saveBtn.textContent;
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Salvando...';
+
+  try {
+    let photoPath = editingPhotoPath;
+    if (currentPhotoAction === 'removed') {
+      await deletePhotoFile(editingPhotoPath);
+      photoPath = null;
+    } else if (currentPhotoAction === 'new') {
+      await deletePhotoFile(editingPhotoPath);
+      photoPath = await uploadPhoto(currentPhotoBlob, id);
+    }
+
+    const row = {
+      id,
+      device_id: userId,
+      name, brand: brand || null, store: store || null, nf: nf || null,
+      emoji: selectedEmoji,
+      photo_url: photoPath,
+      purchase_date: purchaseStr,
+      warranty_months: months,
+      expiry_date: tsToDateInputValue(expiryTs)
+    };
+
+    const { error } = await supabase.from('warranties').upsert(row);
+    if (error) { alert('Não foi possível salvar: ' + error.message); return; }
+
+    closeAddSheet();
+    await refreshProducts();
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = saveBtnLabel;
   }
-
-  localStorage.setItem('garantia_products', JSON.stringify(products));
-  closeAddSheet();
-  renderDash();
 }
 
 function generateId() {
@@ -809,9 +979,60 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
-// Backup export/import
-function exportBackup() {
-  const blob = new Blob([JSON.stringify(products, null, 2)], { type: 'application/json' });
+// Converte uma linha da tabela warranties para o formato usado pela UI
+function rowToProduct(row) {
+  return {
+    id: row.id,
+    emoji: row.emoji || '📱',
+    name: row.name,
+    brand: row.brand || '',
+    store: row.store || '',
+    nf: row.nf || '',
+    months: row.warranty_months,
+    purchaseTs: dateToTs(row.purchase_date),
+    expiryTs: dateToTs(row.expiry_date),
+    photoPath: row.photo_url || null,
+    photo: null
+  };
+}
+
+// Busca URLs assinadas (bucket privado) para os produtos que tem foto
+async function attachSignedPhotoUrls(list) {
+  const paths = list.filter(p => p.photoPath).map(p => p.photoPath);
+  if (paths.length === 0) return list;
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 60 * 60 * 24);
+  if (error || !data) return list;
+  const map = {};
+  data.forEach(d => { if (d.signedUrl) map[d.path] = d.signedUrl; });
+  return list.map(p => p.photoPath ? { ...p, photo: map[p.photoPath] || null } : p);
+}
+
+async function loadProducts() {
+  const { data, error } = await supabase
+    .from('warranties')
+    .select('*')
+    .order('expiry_date', { ascending: true });
+  if (error) { console.error('Erro ao carregar produtos:', error); products = []; return; }
+  products = await attachSignedPhotoUrls(data.map(rowToProduct));
+}
+
+async function refreshProducts() {
+  await loadProducts();
+  renderDash();
+  if (document.getElementById('screen-list').classList.contains('active')) renderList();
+}
+
+// Backup export/import (o JSON e autocontido: fotos vao embutidas em base64)
+async function exportBackup() {
+  const items = [];
+  for (const p of products) {
+    let photo = null;
+    if (p.photo) {
+      try { photo = await blobToDataUrl(await (await fetch(p.photo)).blob()); } catch { photo = null; }
+    }
+    items.push({ id: p.id, emoji: p.emoji, name: p.name, brand: p.brand, store: p.store, nf: p.nf, months: p.months, purchaseTs: p.purchaseTs, expiryTs: p.expiryTs, photo });
+  }
+  const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -828,7 +1049,7 @@ function importBackup(event) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     let imported;
     try {
       imported = JSON.parse(reader.result);
@@ -843,23 +1064,39 @@ function importBackup(event) {
       alert('Arquivo inválido: formato de backup inesperado.');
       return;
     }
-    if (!confirm(`Importar ${imported.length} produto(s)? Isso substitui todos os dados atuais.`)) return;
+    if (!confirm(`Importar ${imported.length} produto(s)? Isso substitui todos os dados atuais na nuvem.`)) return;
 
-    products = imported.map(p => ({ ...p, id: p.id || generateId() }));
-    localStorage.setItem('garantia_products', JSON.stringify(products));
-    renderDash();
-    renderList();
+    for (const p of products) await deletePhotoFile(p.photoPath);
+    await supabase.from('warranties').delete().eq('device_id', userId);
+
+    for (const p of imported) {
+      const id = p.id || generateId();
+      let photoPath = null;
+      if (p.photo) {
+        try { photoPath = await uploadPhoto(await dataUrlToBlob(p.photo), id); } catch { photoPath = null; }
+      }
+      await supabase.from('warranties').upsert({
+        id, device_id: userId, name: p.name, brand: p.brand || null, store: p.store || null,
+        nf: p.nf || null, emoji: p.emoji || '📱', photo_url: photoPath,
+        purchase_date: tsToDateInputValue(p.purchaseTs), warranty_months: p.months,
+        expiry_date: tsToDateInputValue(p.expiryTs)
+      });
+    }
+
+    await refreshProducts();
   };
   reader.readAsText(file);
 }
 
-function deleteProduct() {
+async function deleteProduct() {
   if (!editingId) return;
   if (!confirm('Excluir este produto?')) return;
-  products = products.filter(p => p.id !== editingId);
-  localStorage.setItem('garantia_products', JSON.stringify(products));
+  const p = products.find(x => x.id === editingId);
+  const { error } = await supabase.from('warranties').delete().eq('id', editingId);
+  if (error) { alert('Não foi possível excluir: ' + error.message); return; }
+  if (p) await deletePhotoFile(p.photoPath);
   closeAddSheet();
-  renderDash();
+  await refreshProducts();
 }
 
 // Register service worker
@@ -867,11 +1104,53 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// Initial render
-renderDash();
+// Autenticacao anonima: cada instalacao do app vira um usuario proprio no Supabase,
+// sem tela de login. Precisa de "Allow anonymous sign-ins" habilitado no projeto.
+async function initAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) { userId = session.user.id; return; }
 
-// Update every minute
-setInterval(renderDash, 60000);
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    alert('Não foi possível conectar à nuvem: habilite "Allow anonymous sign-ins" em Authentication → Sign In / Providers no painel do Supabase.');
+    throw error;
+  }
+  userId = data.user.id;
+}
+
+// Migra, uma unica vez, dados que ficaram no localStorage de uma versao anterior do app
+async function migrateLocalDataIfAny() {
+  const raw = localStorage.getItem('garantia_products');
+  if (!raw) return;
+
+  let local;
+  try { local = JSON.parse(raw); } catch { localStorage.removeItem('garantia_products'); return; }
+  if (!Array.isArray(local) || local.length === 0) { localStorage.removeItem('garantia_products'); return; }
+
+  for (const p of local) {
+    const id = p.id || generateId();
+    let photoPath = null;
+    if (p.photo) {
+      try { photoPath = await uploadPhoto(await dataUrlToBlob(p.photo), id); } catch { photoPath = null; }
+    }
+    await supabase.from('warranties').upsert({
+      id, device_id: userId, name: p.name, brand: p.brand || null, store: p.store || null,
+      nf: p.nf || null, emoji: p.emoji || '📱', photo_url: photoPath,
+      purchase_date: tsToDateInputValue(p.purchaseTs), warranty_months: p.months,
+      expiry_date: tsToDateInputValue(p.expiryTs)
+    });
+  }
+  localStorage.removeItem('garantia_products');
+}
+
+async function init() {
+  await initAuth();
+  await migrateLocalDataIfAny();
+  await refreshProducts();
+  setInterval(renderDash, 60000);
+}
+
+init().catch(err => console.error('Erro ao iniciar o app:', err));
 </script>
 </body>
 </html>
